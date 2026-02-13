@@ -14,6 +14,7 @@
       display: grid;
       place-items: center;
       background: linear-gradient(135deg, #ffe1ea, #fff7fb);
+      overflow: hidden;
     }
 
     .card {
@@ -23,6 +24,8 @@
       padding: 28px;
       box-shadow: 0 10px 30px rgba(0,0,0,.12);
       text-align: center;
+      position: relative;
+      z-index: 1;
     }
 
     h1 { margin: 0 0 20px; font-size: 32px; }
@@ -41,24 +44,16 @@
       border: 0;
       cursor: pointer;
       transition: transform .08s ease;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
     }
 
     button:active { transform: scale(0.98); }
 
-    #yes {
-      background: #ff4d7d;
-      color: white;
-    }
+    #yes { background: #ff4d7d; color: white; }
+    #no  { background: #e9e9ef; color: #222; }
 
-    #no {
-      background: #e9e9ef;
-      color: #222;
-    }
-
-    .msg {
-      margin-top: 16px;
-      font-size: 18px;
-    }
+    .msg { margin-top: 16px; font-size: 18px; }
   </style>
 </head>
 
@@ -84,72 +79,115 @@
       no.style.display = "none";
     });
 
-    function clamp(val, min, max) {
-      return Math.max(min, Math.min(max, val));
-    }
-
-    function moveNoButton() {
-      const padding = 20;
-      const rect = no.getBoundingClientRect();
-
-      const maxX = window.innerWidth - rect.width - padding;
-      const maxY = window.innerHeight - rect.height - padding;
-
-      const x = Math.random() * (maxX - padding) + padding;
-      const y = Math.random() * (maxY - padding) + padding;
-
-      no.style.left = `${x}px`;
-      no.style.top = `${y}px`;
-    }
-
-    /* 🔥 Key Trick:
-       When mouse gets close → convert NO to fixed → move it
-    */
-
-    let activated = false;
-
+    // Track mouse position
+    const mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
     window.addEventListener("mousemove", (e) => {
-      const rect = no.getBoundingClientRect();
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+    });
 
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
+    // Utility
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
-      const dx = e.clientX - cx;
-      const dy = e.clientY - cy;
+    // Physics-ish settings (tweak these)
+    const CONFIG = {
+      repelRadius: 140,   // how close before it starts running
+      maxSpeed: 12,       // top speed (px per frame-ish)
+      accel: 1.1,         // acceleration strength
+      friction: 0.86,     // lower = more slippery, higher = more floaty
+      padding: 16         // keep it away from screen edges
+    };
 
-      const distance = Math.hypot(dx, dy);
-      const triggerDistance = 120;
+    let active = false;
+    let pos = { x: 0, y: 0 };    // top-left position of the button
+    let vel = { x: 0, y: 0 };
 
-      if (distance < triggerDistance) {
+    function activateFixedPositionOnce() {
+      if (active) return;
+      active = true;
 
-        /* First time only → detach from layout */
-        if (!activated) {
-          activated = true;
+      // Convert current in-layout position to fixed coords (so it starts next to YES)
+      const r = no.getBoundingClientRect();
+      no.style.position = "fixed";
+      no.style.left = `${r.left}px`;
+      no.style.top = `${r.top}px`;
 
-          const startRect = no.getBoundingClientRect();
+      pos.x = r.left;
+      pos.y = r.top;
+    }
 
-          no.style.position = "fixed";
-          no.style.left = `${startRect.left}px`;
-          no.style.top = `${startRect.top}px`;
+    // If the cursor gets near the button, "activate" the fleeing behavior
+    window.addEventListener("mousemove", () => {
+      const r = no.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      const d = Math.hypot(mouse.x - cx, mouse.y - cy);
+
+      if (d < CONFIG.repelRadius) activateFixedPositionOnce();
+    });
+
+    // Main animation loop
+    function tick() {
+      if (active && no.style.display !== "none") {
+        const r = no.getBoundingClientRect();
+        const cx = pos.x + r.width / 2;
+        const cy = pos.y + r.height / 2;
+
+        const dx = cx - mouse.x;
+        const dy = cy - mouse.y;
+        const dist = Math.hypot(dx, dy) || 0.0001;
+
+        // When close, accelerate away from cursor (stronger the closer you get)
+        if (dist < CONFIG.repelRadius) {
+          const strength = (1 - dist / CONFIG.repelRadius); // 0..1
+          const ax = (dx / dist) * CONFIG.accel * (1 + 2.2 * strength);
+          const ay = (dy / dist) * CONFIG.accel * (1 + 2.2 * strength);
+          vel.x += ax;
+          vel.y += ay;
         }
 
-        moveNoButton();
+        // Apply friction
+        vel.x *= CONFIG.friction;
+        vel.y *= CONFIG.friction;
+
+        // Cap speed
+        const speed = Math.hypot(vel.x, vel.y);
+        if (speed > CONFIG.maxSpeed) {
+          vel.x = (vel.x / speed) * CONFIG.maxSpeed;
+          vel.y = (vel.y / speed) * CONFIG.maxSpeed;
+        }
+
+        // Update position
+        pos.x += vel.x;
+        pos.y += vel.y;
+
+        // Keep on-screen
+        const minX = CONFIG.padding;
+        const minY = CONFIG.padding;
+        const maxX = window.innerWidth - r.width - CONFIG.padding;
+        const maxY = window.innerHeight - r.height - CONFIG.padding;
+
+        pos.x = clamp(pos.x, minX, maxX);
+        pos.y = clamp(pos.y, minY, maxY);
+
+        no.style.left = `${pos.x}px`;
+        no.style.top = `${pos.y}px`;
       }
+
+      requestAnimationFrame(tick);
+    }
+
+    // Re-clamp on resize
+    window.addEventListener("resize", () => {
+      if (!active) return;
+      const r = no.getBoundingClientRect();
+      pos.x = clamp(pos.x, CONFIG.padding, window.innerWidth - r.width - CONFIG.padding);
+      pos.y = clamp(pos.y, CONFIG.padding, window.innerHeight - r.height - CONFIG.padding);
+      no.style.left = `${pos.x}px`;
+      no.style.top = `${pos.y}px`;
     });
 
-    no.addEventListener("mouseenter", () => {
-      if (!activated) {
-        activated = true;
-
-        const startRect = no.getBoundingClientRect();
-
-        no.style.position = "fixed";
-        no.style.left = `${startRect.left}px`;
-        no.style.top = `${startRect.top}px`;
-      }
-
-      moveNoButton();
-    });
+    tick();
   </script>
 </body>
 </html>
