@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Valentine?</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    body {
+      margin: 0;
+      height: 100vh;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #ffe1ea, #fff7fb);
+    }
+    .card {
+      width: min(520px, calc(100% - 32px));
+      background: white;
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.12);
+      text-align: center;
+    }
+    h1 { margin: 0 0 18px; font-size: 32px; }
+    .buttons {
+      position: relative;       /* keeps YES in normal flow */
+      display: flex;
+      gap: 14px;
+      justify-content: center;
+      align-items: center;
+      padding-top: 10px;
+      min-height: 64px;
+    }
+    button {
+      font-size: 18px;
+      padding: 12px 20px;
+      border-radius: 999px;
+      border: 0;
+      cursor: pointer;
+      transition: transform .08s ease;
+    }
+    button:active { transform: scale(0.98); }
+
+    #yes { background: #ff4d7d; color: white; }
+    #no {
+      background: #e9e9ef;
+      color: #222;
+      position: fixed;          /* allow it to jump anywhere on screen */
+      left: 50%;
+      top: 50%;
+      transform: translate(90px, 40px); /* start it near the YES */
+    }
+
+    .msg { margin-top: 14px; font-size: 18px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Will you be my valentine? 💘</h1>
+
+    <div class="buttons">
+      <button id="yes">Yes</button>
+      <!-- "No" is positioned fixed, so it won't take space here -->
+      <button id="no" aria-label="No">No</button>
+    </div>
+
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <script>
+    const yes = document.getElementById("yes");
+    const no = document.getElementById("no");
+    const msg = document.getElementById("msg");
+
+    yes.addEventListener("click", () => {
+      msg.textContent = "Yay!! 🥰💐";
+      // optional: hide the No button after yes
+      no.style.display = "none";
+    });
+
+    // Keeps the "No" button from being unreachable off-screen
+    function clamp(val, min, max) {
+      return Math.max(min, Math.min(max, val));
+    }
+
+    function moveNoButton() {
+      const padding = 20; // keep away from edges
+      const rect = no.getBoundingClientRect();
+
+      const maxX = window.innerWidth - rect.width - padding;
+      const maxY = window.innerHeight - rect.height - padding;
+
+      const x = Math.random() * (maxX - padding) + padding;
+      const y = Math.random() * (maxY - padding) + padding;
+
+      no.style.left = `${x}px`;
+      no.style.top = `${y}px`;
+      no.style.transform = "none";
+    }
+
+    // Option 1: Move when cursor gets close (feels more “alive”)
+    window.addEventListener("mousemove", (e) => {
+      const rect = no.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      const dx = e.clientX - cx;
+      const dy = e.clientY - cy;
+      const distance = Math.hypot(dx, dy);
+
+      const triggerDistance = 120; // px
+      if (distance < triggerDistance) moveNoButton();
+    });
+
+    // Option 2 (backup): also move if it ever gets hovered
+    no.addEventListener("mouseenter", moveNoButton);
+
+    // Place it initially (so it’s not always centered)
+    moveNoButton();
+  </script>
+</body>
+</html>
